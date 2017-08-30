@@ -1,5 +1,7 @@
 package io.sugo.http.database;
 
+import io.sugo.http.code.JBoss;
+
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.sql.Connection;
@@ -28,8 +30,11 @@ public class OracleDbManager {
             props.load(new FileInputStream("config.properties"));
             USER = props.getProperty("oracle.username");
             PASSWORD = props.getProperty("oracle.password");
+            if(props.getProperty("oracle.encode").equals("true")) {
+                PASSWORD = JBoss.deCode(PASSWORD);
+            }
             URL = props.getProperty("oracle.url");
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
 

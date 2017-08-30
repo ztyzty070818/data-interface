@@ -2,13 +2,11 @@ package io.sugo.http.resource;
 
 
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import io.sugo.http.database.OracleDbManager;
 import io.sugo.http.resource.Cache.DataCache;
 import org.apache.log4j.Logger;
-
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -73,7 +71,13 @@ public class WxjResource {
         if(demo == true) {
             returnStr = receiptRe;
         } else {
-            returnStr = getResultFromCache("receipt");
+            try {
+                returnStr = getResultFromCache("receipt");
+            } catch (Exception e) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
+                        .build();
+            }
         }
         return Response.ok(returnStr).build();
     }
@@ -128,36 +132,8 @@ public class WxjResource {
         while(resultSet.next()) {
 
             map = new HashMap();
-
-            for(int i=0; i<areas.length; i++) {
-                if(types[i].trim().equals("int")) {
-                    map.put(areas_EN[i],resultSet.getInt(areas[i]));
-                } else if(types[i].trim().equals("double")) {
-                    map.put(areas_EN[i],resultSet.getDouble(areas[i]));
-                } else if(types[i].trim().equals("string")) {
-                    String str = resultSet.getString(areas[i]);
-                    if(str!=null && str.trim().length()>0) {
-                        map.put(areas_EN[i],resultSet.getString(areas[i]));
-                    } else {
-                        map.put(areas_EN[i],"");
-                    }
-                } else if(types[i].trim().equals("date")) {
-                    map.put(areas_EN[i],resultSet.getDate(areas[i]));
-                } else if(types[i].trim().equals("float")) {
-                    map.put(areas_EN[i],resultSet.getFloat(areas[i]));
-                } else if(types[i].trim().equals("long")) {
-                    map.put(areas_EN[i],resultSet.getLong(areas[i]));
-                } else if(types[i].trim().equals("boolean")) {
-                    map.put(areas_EN[i],resultSet.getBoolean(areas[i]));
-                } else if(types[i].trim().equals("byte")) {
-                    map.put(areas_EN[i],resultSet.getByte(areas[i]));
-                } else {
-                    throw new Exception("字段类型错误");
-                }
-            }
-
+            putColumnsToMap(map,resultSet,areas,types,areas_EN);
             count++;
-
             list.add(jsonMapper.writeValueAsString(map));
         }
         LOG.info("record count : " + count);
@@ -180,18 +156,19 @@ public class WxjResource {
             list.add(jsonMapper.writeValueAsString(entry.getValue()));
         }
 
-
-
-
-
         String returnString = "{\"result\" : "+list.toString()+"}";
         return returnString;
     }
 
-    public static Map<String,Map<String,Object>> getResultMap(String sql,String name) throws Exception {
+    public static Map<String,Map<String,Object>> getResultMap(String sql,String name) throws SQLException {
         LOG.info("sql = "+sql);
 
-        ResultSet resultSet = stmt.executeQuery(sql);
+        ResultSet resultSet;
+        try {
+            resultSet = stmt.executeQuery(sql);
+        } catch (SQLException e) {
+            throw new SQLException("查询语句出错");
+        }
         String[] areas = properties.getProperty(name+".areas").split(",");
         String[] types = properties.getProperty(name+".type").split(",");
         String[] areas_EN = properties.getProperty(name+".english").split(",");
@@ -203,34 +180,7 @@ public class WxjResource {
         while(resultSet.next()) {
 
             map = new HashMap();
-
-            for(int i=0; i<areas.length; i++) {
-                if(types[i].trim().equals("int")) {
-                    map.put(areas_EN[i],resultSet.getInt(areas[i]));
-                } else if(types[i].trim().equals("double")) {
-                    map.put(areas_EN[i],resultSet.getDouble(areas[i]));
-                } else if(types[i].trim().equals("string")) {
-                    String str = resultSet.getString(areas[i]);
-                    if(str!=null && str.trim().length()>0) {
-                        map.put(areas_EN[i],resultSet.getString(areas[i]));
-                    } else {
-                        map.put(areas_EN[i],"");
-                    }
-                } else if(types[i].trim().equals("date")) {
-                    map.put(areas_EN[i],resultSet.getDate(areas[i]));
-                } else if(types[i].trim().equals("float")) {
-                    map.put(areas_EN[i],resultSet.getFloat(areas[i]));
-                } else if(types[i].trim().equals("long")) {
-                    map.put(areas_EN[i],resultSet.getLong(areas[i]));
-                } else if(types[i].trim().equals("boolean")) {
-                    map.put(areas_EN[i],resultSet.getBoolean(areas[i]));
-                } else if(types[i].trim().equals("byte")) {
-                    map.put(areas_EN[i],resultSet.getByte(areas[i]));
-                } else {
-                    throw new Exception("数据库字段类型对应不上");
-                }
-            }
-
+            putColumnsToMap(map,resultSet,areas,types,areas_EN);
             count++;
             String keyStr = map.get("code")+"";
             rm.put(keyStr,map);
@@ -239,9 +189,45 @@ public class WxjResource {
         return rm;
     }
 
-    public static String createErrorReturn(String errorStr) {
-        String returnStr = "{\"error\" : \""+errorStr + "\"}";
-        return returnStr;
+    public static void putColumnsToMap(Map<String,Object> map,ResultSet resultSet,String areas[],String types[],String areas_EN[]) throws SQLException {
+        for(int i=0; i<areas.length; i++) {
+            String type = types[i].trim();
+            putColumnToMap(map,type,resultSet,areas_EN,areas,i);
+        }
+    }
+
+    public static void putColumnToMap(Map<String,Object> map,String type,ResultSet resultSet,String areas_EN[],String areas[],int i) throws SQLException {
+
+        try {
+            switch (type) {
+                case "int":
+                    map.put(areas_EN[i],resultSet.getInt(areas[i]));break;
+                case "double":
+                    map.put(areas_EN[i],resultSet.getDouble(areas[i]));break;
+                case "string":
+                    String str = resultSet.getString(areas[i]);
+                    if(str!=null && str.trim().length()>0) {
+                        map.put(areas_EN[i],str);
+                    } else {
+                        map.put(areas_EN[i],"");
+                    }
+                    break;
+                case "date":
+                    map.put(areas_EN[i],resultSet.getDate(areas[i]));break;
+                case "float":
+                    map.put(areas_EN[i],resultSet.getFloat(areas[i]));break;
+                case "long":
+                    map.put(areas_EN[i],resultSet.getLong(areas[i]));break;
+                case "boolean":
+                    map.put(areas_EN[i],resultSet.getBoolean(areas[i]));break;
+                case "byte":
+                    map.put(areas_EN[i],resultSet.getByte(areas[i]));break;
+                default:
+                    throw new SQLException("不存在该数据库字段类型");
+            }
+        } catch (SQLException e){
+            throw new SQLException("该数据库字段类型与"+type+"对应不上");
+        }
     }
 
 }
