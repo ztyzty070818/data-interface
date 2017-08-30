@@ -2,7 +2,6 @@ dist
 *.iml
 *.ipr
 *.iws
-*.tar.gz
 *.swp
 *.swo
 .classpath
