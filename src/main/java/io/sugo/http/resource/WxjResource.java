@@ -82,6 +82,52 @@ public class WxjResource {
         return Response.ok(returnStr).build();
     }
 
+    @GET
+    @Path("/sales/count")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.TEXT_PLAIN)
+    public Response salesCount()  {
+
+        String returnStr;
+        try {
+            returnStr = getCount("sales");
+        } catch (Exception e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
+                    .build();
+        }
+        return Response.ok(returnStr).build();
+    }
+
+    @GET
+    @Path("/receipt/count")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.TEXT_PLAIN)
+    public Response receiptCount()  {
+
+        String returnStr;
+        try {
+            returnStr = getCount("receipt");
+        } catch (Exception e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
+                    .build();
+        }
+        return Response.ok(returnStr).build();
+    }
+
+    public String getCount(String name) throws SQLException {
+        String tableName = properties.getProperty(name+".table");
+        String sql = "select count(*) from "+tableName;
+
+        ResultSet resultSet = stmt.executeQuery(sql);
+        int count = 0;
+        if(resultSet.next()) {
+            count = resultSet.getInt(1);
+        }
+        return "row count:"+count;
+    }
+
 
     public static String createSql(String name) {
         StringBuffer sb = new StringBuffer();
@@ -153,6 +199,7 @@ public class WxjResource {
             entry.getValue().put(areas_EN[2], bMap.get(areas_EN[2]));
             entry.getValue().put(areas_EN[3], bMap.get(areas_EN[3]));
             entry.getValue().put(areas_EN[4], bMap.get(areas_EN[4]));
+            entry.getValue().put(areas_EN[5], bMap.get(areas_EN[5]));
             list.add(jsonMapper.writeValueAsString(entry.getValue()));
         }
 

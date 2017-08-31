@@ -35,6 +35,6 @@ public class JBoss {
 
 
     public static void main(String[] args) throws IllegalBlockSizeException, InvalidKeyException, BadPaddingException, NoSuchAlgorithmException, NoSuchPaddingException {
-        System.out.println(enCode("orcl"));
+        System.out.println(deCode("6f8e652f571678f2"));
     }
 }
