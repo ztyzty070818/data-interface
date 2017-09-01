@@ -14,6 +14,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
@@ -36,9 +37,73 @@ public class WxjResource {
         branchRe = properties.getProperty("branch.result");
     }
 
-
+    private static int totalCount = 0;
     private static final ObjectMapper jsonMapper = new ObjectMapper();
     private static final Statement stmt = OracleDbManager.getStmt();
+
+    @GET
+    @Path("count")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.TEXT_PLAIN)
+    public Response totalCount()  {
+        return Response.ok("Access times:"+totalCount).build();
+    }
+
+    @GET
+    @Path("receipt/record")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.TEXT_PLAIN)
+    public Response receiptRecord() {
+
+        String records;
+        try {
+            records = getRecords("receipt");
+        } catch (SQLException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
+                    .build();
+        }
+        totalCount++;
+        return Response.ok(records).build();
+    }
+
+    @GET
+    @Path("sales/record")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.TEXT_PLAIN)
+    public Response salesRecord() {
+
+        String records;
+        try {
+            records = getRecords("sales");
+        } catch (SQLException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
+                    .build();
+        }
+        totalCount++;
+        return Response.ok(records).build();
+    }
+
+    @GET
+    @Path("branch/record")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.TEXT_PLAIN)
+    public Response branchRecord() {
+
+        String records;
+        try {
+            records = getRecords("branch");
+        } catch (SQLException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
+                    .build();
+        }
+        totalCount++;
+        return Response.ok(records).build();
+    }
+
+
 
     @POST
     @Path("/sales")
@@ -58,6 +123,7 @@ public class WxjResource {
                         .build();
             }
         }
+        totalCount++;
         return Response.ok(returnStr).build();
     }
 
@@ -79,6 +145,7 @@ public class WxjResource {
                         .build();
             }
         }
+        totalCount++;
         return Response.ok(returnStr).build();
     }
 
@@ -96,6 +163,7 @@ public class WxjResource {
                     .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
                     .build();
         }
+        totalCount++;
         return Response.ok(returnStr).build();
     }
 
@@ -113,6 +181,7 @@ public class WxjResource {
                     .entity(ImmutableMap.<String, Object>of("error", e.getMessage()))
                     .build();
         }
+        totalCount++;
         return Response.ok(returnStr).build();
     }
 
@@ -145,11 +214,10 @@ public class WxjResource {
         sql = getSQLFromCache(name);
         if(name.equals("sales")) {
             String branchSql = getSQLFromCache("branch");
-            returnStr = getReceiptResult(sql,branchSql);
+            returnStr = getSalesResult(sql,branchSql);
         } else {
             returnStr = getResult(sql,name);
         }
-
         return returnStr;
     }
 
@@ -187,7 +255,7 @@ public class WxjResource {
         return returnString;
     }
 
-    public static String getReceiptResult(String sql,String BranchSql) throws Exception {
+    public static String getSalesResult(String sql,String BranchSql) throws Exception {
 
         Map<String,Map<String,Object>> receiptMap = getResultMap(sql,"sales");
         Map<String,Map<String,Object>> branchMap = getResultMap(BranchSql,"branch");
@@ -196,10 +264,9 @@ public class WxjResource {
         for(Map.Entry<String,Map<String,Object>> entry:receiptMap.entrySet()){
             Map<String,Object> bMap = branchMap.get(entry.getKey());
             String[] areas_EN = properties.getProperty("branch.english").split(",");
-            entry.getValue().put(areas_EN[2], bMap.get(areas_EN[2]));
-            entry.getValue().put(areas_EN[3], bMap.get(areas_EN[3]));
-            entry.getValue().put(areas_EN[4], bMap.get(areas_EN[4]));
-            entry.getValue().put(areas_EN[5], bMap.get(areas_EN[5]));
+            for(int i=2;i<areas_EN.length;i++) {
+                entry.getValue().put(areas_EN[i], bMap.get(areas_EN[i]));
+            }
             list.add(jsonMapper.writeValueAsString(entry.getValue()));
         }
 
@@ -275,6 +342,43 @@ public class WxjResource {
         } catch (SQLException e){
             throw new SQLException("该数据库字段类型与"+type+"对应不上");
         }
+    }
+
+    private String getRecords(String name) throws SQLException {
+        int rowCount = 0;
+        int columnCount = 0;
+        String tableName = properties.getProperty(name+".table");
+        String sql = "select * from " + tableName;
+
+        ResultSet resultSet;
+        try {
+            resultSet = stmt.executeQuery(sql);
+        } catch (SQLException e) {
+            throw new SQLException("查询语句出错");
+        }
+
+        StringBuffer stringBuffer = new StringBuffer();
+
+        ResultSetMetaData rsmd = resultSet.getMetaData();
+        columnCount = rsmd.getColumnCount();
+
+        for(int i=0;i<columnCount;i++) {
+            stringBuffer.append(rsmd.getColumnName(i+1)).append("\t");
+        }
+        stringBuffer.append("\r\n\r\n");
+
+        while(resultSet.next() ) {
+            rowCount = resultSet.getRow();
+
+            for(int i=0;i<columnCount-1;i++) {
+                stringBuffer.append(resultSet.getString(i+1)).append("\t\t");
+            }
+            stringBuffer.append(resultSet.getString(columnCount)).append("\r\n");
+        }
+
+        stringBuffer.append("\r\nrecord count:" + rowCount).append("\r\ncolumn count:" + columnCount);
+
+        return stringBuffer.substring(0,stringBuffer.length());
     }
 
 }

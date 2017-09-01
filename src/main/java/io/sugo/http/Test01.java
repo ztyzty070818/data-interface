@@ -9,7 +9,8 @@ public class Test01 {
 
 
     public static void main(String[] args) throws IOException {
-        byte[] b={'a','c','v','b'};
-        System.out.println(b.toString());
+        StringBuffer sb = new StringBuffer("ac");
+        sb.append("d");
+        System.out.println(sb);
     }
 }
